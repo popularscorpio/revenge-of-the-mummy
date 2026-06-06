@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Anubis: Pyramid of Judgment DX</title>
+<style>
+body{margin:0;overflow:hidden;background:#000;font-family:system-ui}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;color:white}
+#retry{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+padding:12px 24px;font-size:20px;display:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"></div>
+<button id="retry">Retry</button>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+const ui=document.getElementById('ui'),retry=document.getElementById('retry');
+function rs(){c.width=innerWidth;c.height=innerHeight}rs();onresize=rs;
+
+let state="cutscene",cut=0,msg="",ending="";
+const world=15000;
+let flash=0;
+
+const p={x:100,y:450,w:32,h:48,vx:0,vy:0,g:false,relics:0};
+const keys={}; onkeydown=e=>keys[e.key]=1; onkeyup=e=>keys[e.key]=0;
+
+const plats=[];
+for(let i=0;i<40;i++) plats.push({x:i*380,y:520-(i%4)*50,w:220,h:20});
+plats.push({x:14500,y:350,w:300,h:20});
+
+const relics=[2000,5000,8000,11000,13500].map(v=>({x:v,y:260,got:false}));
+const treasure={x:6500,y:250,got:false};
+
+const lava=[{x:4200,w:500},{x:9200,w:700},{x:13800,w:500}];
+
+const anubis={x:-1000,y:470,active:false,phase:0};
+
+function reset(){
+ state="game"; ending=""; flash=0; retry.style.display="none";
+ p.x=100;p.y=450;p.vx=0;p.vy=0;p.relics=0;
+ relics.forEach(r=>r.got=false); treasure.got=false;
+ anubis.x=-1000; anubis.phase=0; anubis.active=false;
+}
+
+retry.onclick=reset;
+
+function die(text){
+ ending=text;
+ state="end";
+ retry.style.display="block";
+}
+
+function update(){
+ p.vx=0;
+ if(keys.a||keys.ArrowLeft)p.vx=-5;
+ if(keys.d||keys.ArrowRight)p.vx=5;
+ if((keys.w||keys.ArrowUp||keys[" "])&&p.g){p.vy=-15;}
+ p.vy+=0.65;
+ p.x+=p.vx; p.y+=p.vy; p.g=false;
+
+ if(p.y>900) die("Lost in the abyss");
+
+ for(const pl of plats){
+  if(p.x+p.w>pl.x&&p.x<pl.x+pl.w&&p.y+p.h>pl.y&&p.y+p.h<pl.y+20&&p.vy>=0){
+   p.y=pl.y-p.h;p.vy=0;p.g=true;
+  }
+ }
+
+ lava.forEach(L=>{
+  if(p.x+p.w>L.x&&p.x<L.x+L.w&&p.y+p.h>520) die("Consumed by lava");
+ });
+
+ relics.forEach(r=>{
+   if(!r.got && Math.abs(p.x-r.x)<40 && Math.abs(p.y-r.y)<80){
+      r.got=true;p.relics++;
+      anubis.active=true;
+      flash=10;
+   }
+ });
+
+ if(!treasure.got && Math.abs(p.x-treasure.x)<40){
+   treasure.got=true;
+   msg="You stole the Pharaoh's treasure...";
+ }
+
+ if(anubis.active){
+   anubis.phase=Math.min(5,p.relics);
+   if(anubis.phase<3){
+      if(Math.random()<0.003) flash=4;
+   }else{
+      anubis.x+=(p.x-anubis.x)*0.012+1.8;
+      if(Math.abs(anubis.x-p.x)<50) die("Anubis claimed your soul");
+   }
+ }
+
+ if(p.x>14800){
+   state="end";
+   retry.style.display="block";
+   if(p.relics===5) ending="TRUE ENDING - Judged Worthy";
+   else if(treasure.got) ending="GREED ENDING - Rich but Cursed";
+   else ending="ESCAPE ENDING - You Fled";
+ }
+}
+
+function drawCutscene(){
+ x.fillStyle="#02050b";x.fillRect(0,0,c.width,c.height);
+ x.fillStyle="#d8be84";
+ x.beginPath();
+ x.moveTo(c.width*.65,c.height*.8);
+ x.lineTo(c.width*.78,c.height*.2);
+ x.lineTo(c.width*.92,c.height*.8);
+ x.fill();
+ let px=100+cut*3;
+ x.fillStyle="white";x.fillRect(px,c.height*.75,20,35);
+ x.fillStyle="white";
+ x.font="30px sans-serif";
+ if(cut<120)x.fillText("Egypt. Midnight.",40,60);
+ else if(cut<240)x.fillText("A forgotten pyramid awaits...",40,60);
+ else x.fillText("Enter if you dare.",40,60);
+ cut++;
+ if(cut>360) state="game";
+}
+
+function drawGame(){
+ const cam=Math.max(0,p.x-c.width/3);
+
+ x.fillStyle="#151008";x.fillRect(0,0,c.width,c.height);
+
+ for(let i=0;i<50;i++){
+  x.fillStyle="rgba(255,220,150,.04)";
+  x.fillRect((i*300-cam*.3)%c.width,0,80,c.height);
+ }
+
+ x.save();x.translate(-cam,0);
+
+ x.fillStyle="#7b5a2f";
+ plats.forEach(pl=>x.fillRect(pl.x,pl.y,pl.w,pl.h));
+
+ x.fillStyle="#ff5a1f";
+ lava.forEach(L=>x.fillRect(L.x,520,L.w,80));
+
+ relics.forEach(r=>{
+  if(!r.got){x.fillStyle="gold";x.fillRect(r.x,r.y,24,24);}
+ });
+
+ if(!treasure.got){x.fillStyle="#00ffff";x.fillRect(treasure.x,250,24,24);}
+
+ x.fillStyle="white";
+ x.fillRect(p.x,p.y,p.w,p.h);
+
+ if(anubis.active){
+  x.fillStyle="black";
+  x.fillRect(anubis.x,450,55,80);
+  x.fillStyle="red";
+  x.fillRect(anubis.x+12,468,8,8);
+  x.fillRect(anubis.x+35,468,8,8);
+ }
+
+ x.restore();
+
+ const g=x.createRadialGradient(c.width/2,c.height/2,30,c.width/2,c.height/2,280);
+ g.addColorStop(0,"rgba(0,0,0,0)");
+ g.addColorStop(1,"rgba(0,0,0,.94)");
+ x.fillStyle=g;x.fillRect(0,0,c.width,c.height);
+
+ if(flash>0){
+   x.fillStyle="rgba(255,255,255,.85)";
+   x.fillRect(0,0,c.width,c.height);
+   flash--;
+ }
+
+ ui.innerHTML=`Relics ${p.relics}/5<br>Anubis Phase ${anubis.phase}<br>${msg}`;
+}
+
+function drawEnd(){
+ x.fillStyle="black";x.fillRect(0,0,c.width,c.height);
+ x.fillStyle="white";
+ x.font="48px sans-serif";
+ x.fillText(ending,50,c.height/2);
+}
+
+function loop(){
+ if(state==="cutscene") drawCutscene();
+ else if(state==="game"){update();drawGame();}
+ else drawEnd();
+ requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
